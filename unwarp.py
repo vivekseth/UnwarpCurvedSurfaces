@@ -1,9 +1,10 @@
+import sys
 import cv2
 import numpy as np
 import scipy as scp
 from scipy.interpolate import griddata
 
-image = cv2.imread('./warped-puppy.png')
+image = cv2.imread('./screenshot2.png')
 
 
 gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -51,12 +52,13 @@ cropped_heights = (image_height/2) - cropped_top_contour
 
 out, contours, hier = cv2.findContours(clean_binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-#cv2.drawContours(image, contours, -1, (0,255,0), 3)
 bounding_box = cv2.boundingRect(contours[0])
 p1 = bounding_box[0:2]
 p2 = (bounding_box[0] + bounding_box[2], bounding_box[1] + bounding_box[3])
-#cv2.rectangle(image, p1, p2, (255, 0, 0))
 
+# Visualizations: 
+# cv2.drawContours(image, contours, -1, (0,255,0), 3)
+# cv2.rectangle(image, p1, p2, (255, 0, 0))
 # for p in contours[0]:
 #     x = p[0][0]
 #     y = p[0][1]
@@ -111,6 +113,8 @@ y_max = max(np_point_cloud[:, 0, 1])
 
 print x_min, x_max, y_min, y_max
 
+# so far so good
+
 x_range = (x_max - x_min)
 y_range = (y_max - y_min)
 
@@ -118,7 +122,6 @@ y_range = (y_max - y_min)
 x_step = (x_range / 100)
 y_step = (y_range / 100)
 grid_x, grid_y = np.mgrid[x_min+x_step:x_max+x_step:(x_range / 100), y_min+y_step:y_max:(y_range / 100)]
-
 
 interp_points = np_point_cloud[:, 0, 0:2]
 interp_values_z = np_point_cloud[:, 0, 2]
@@ -132,8 +135,6 @@ grid_z = griddata(interp_points, interp_values_z, (grid_x, grid_y), method='cubi
 grid_b = griddata(interp_points, interp_values_b, (grid_x, grid_y), method='cubic')
 grid_g = griddata(interp_points, interp_values_g, (grid_x, grid_y), method='cubic')
 grid_r = griddata(interp_points, interp_values_r, (grid_x, grid_y), method='cubic')
-
-y_index = 1
 
 def dist_arr_for_y(y_index):
     dist_arr = np.zeros(len(grid_x))
@@ -153,9 +154,12 @@ def dist_arr_for_y(y_index):
 all_dist_arr = []
 for i in range(len(grid_y[0])):
     dist_arr = dist_arr_for_y(i)
+    max_dist = max(dist_arr);
+    dist_arr[np.isnan(dist_arr)] = 0
     all_dist_arr.append(dist_arr)
 
 np_all_dist_arr = np.array(all_dist_arr).T
+
 print grid_y.shape
 print np_all_dist_arr.shape
 print grid_b.shape
@@ -227,46 +231,12 @@ im_grid_g = griddata(scaled_yd, interp_values_yd_g, (img_grid_y, img_grid_x), me
 im_grid_r = griddata(scaled_yd, interp_values_yd_r, (img_grid_y, img_grid_x), method='cubic')
 
 
-rectifiedImage[:, :, 0] = im_grid_b / 255.0
-rectifiedImage[:, :, 1] = im_grid_g / 255.0
-rectifiedImage[:, :, 2] = im_grid_r / 255.0
+rectifiedImage[:, :, 0] = im_grid_b #/ 255.0
+rectifiedImage[:, :, 1] = im_grid_g #/ 255.0
+rectifiedImage[:, :, 2] = im_grid_r #/ 255.0
 
-cv2.imshow('TEST', rectifiedImage)
-cv2.waitKey(0);
+cv2.imwrite('./rectifiedImage.png', rectifiedImage)
 
-
-
-
-
-
-
-
-
-
-# Next step is to interpolate each color channel independently.
-
-
-
-
-
-
-
-# 
-
-
-# cv2.imshow('original image', image)
-# cv2.imshow('rectified image', rectifiedImage)
+# cv2.imshow('TEST', rectifiedImage)
 # cv2.waitKey(0);
-
-
-
-
-
-#image[10, :] = (0, 0, 255)
-#cv2.imshow('', image);
-#cv2.waitKey(0);
-
-
-
-
 
