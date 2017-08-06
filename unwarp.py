@@ -122,9 +122,10 @@ rectifiedImage = np.zeros((scaled_height + 1, fixed_width + 1, 3))
 for (point, color) in point_cloud:
     rx = int(((point[0] - x_min) / (x_range)) * fixed_width)
     ry = int(((point[1] - y_min) / (y_range)) * scaled_height)
-    #print color
-    #print rectifiedImage[ry, rx].shape
     rectifiedImage[ry, rx] = np.array(color) / 255.0
+
+
+
 
 
 cv2.imshow('original image', image)
