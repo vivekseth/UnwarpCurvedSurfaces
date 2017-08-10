@@ -105,6 +105,11 @@ def interpolate_point_cloud_1(point_cloud, grid_x, grid_y):
     grid_b = griddata(interp_points, interp_values_b, (grid_x, grid_y), method='cubic')
     grid_g = griddata(interp_points, interp_values_g, (grid_x, grid_y), method='cubic')
     grid_r = griddata(interp_points, interp_values_r, (grid_x, grid_y), method='cubic')
+    
+    # Get rid of NaNs
+    grid_b = np.nan_to_num(grid_b)
+    grid_g = np.nan_to_num(grid_g)
+    grid_r = np.nan_to_num(grid_r)
 
     return grid_z, grid_b, grid_g, grid_r
 
