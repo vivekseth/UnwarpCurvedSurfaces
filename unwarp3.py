@@ -65,10 +65,6 @@ def contour_to_world_points(contour, cont_range):
         wz = (ih_ref * wz_ref) / height_map[i]
         wx = wz * ix / focal;
         wy = wz * iy / focal;
-        # tix = wx / wz;
-        # tiy = wy / wz;
-        # print ix - tix * focal, iy - tiy * focal
-        # print (ix, iy), '=>', (wx, wy, wz)
         world_points.append([wx, wy, wz])
 
     return np.array(world_points)
@@ -124,17 +120,10 @@ for oy in range(len(output_image)):
         wy = v
         wz = fDistToWz(d)
 
-        # print wx, wy, wz
-
         ix, iy = world_to_source(wx, wy, wz)
-        # print ix, iy
 
         image_x = (image_width/2) - ix
         image_y = (image_height/2) - iy
-
-        # print image_x, image_y
-
-        #image[int(image_y), int(image_x)] = (255, 0, 0)
 
         pixel = cv2.getRectSubPix(image, (1, 1), (image_x, image_y))
         output_image[oy, ox] = pixel[0, 0] / 255.0
