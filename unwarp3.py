@@ -82,7 +82,7 @@ wz = world_points[:, 2]
 
 # ** ALERT ** wx might be flipped 
 
-fWxToWz = interp1d(wx, wz, kind='cubic')
+fWxToWz = interp1d(wx[::-1], wz, kind='cubic')
 
 x_interval = np.linspace(min(wx), max(wx), num=100, endpoint=True)
 
@@ -129,6 +129,7 @@ for oy in range(len(output_image)):
         output_image[oy, ox] = pixel[0, 0] / 255.0
 
 
+cv2.imwrite('./output_image.png', output_image * 255.0)
 cv2.imshow('', output_image)
 cv2.waitKey(0)
 
