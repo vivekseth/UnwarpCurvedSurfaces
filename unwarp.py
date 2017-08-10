@@ -39,6 +39,77 @@ def bounding_box(bin_image):
     bounding_box = cv2.boundingRect(contours[0])
     return bounding_box
 
+def create_point_cloud(image, box):
+    point_cloud = []
+
+    for y in range(box[3]):
+        for x in range(box[2]):
+            ix = x + box[0]
+            iy = y + box[1]
+            #image[iy, ix] = (255, 0, 0)
+
+            wz = worldZ(heights, ref_point_index, ix, iy)
+            wx = worldX(heights, ref_point_index, image_height, focal, ix, iy)
+            wy = worldY(heights, ref_point_index, image_height, focal, ix, iy)
+            color = image[iy, ix];
+            point = np.array([wx, wy, wz])
+            point_cloud.append([point, color]);
+
+    np_point_cloud = np.array(point_cloud);
+    return np_point_cloud
+
+def worldZ(heights, ref_point, ix, iy):
+    ih_ref = heights[ref_point]
+    wz_ref = 1;
+    return (ih_ref * wz_ref) / heights[ix]
+
+def worldX(heights, ref_point, image_height, focal, ix, iy):
+    wz = worldZ(heights, ref_point, ix, iy);
+    pinholeX = ix - (image_width/2)
+    return wz * pinholeX / focal;
+
+def worldY(heights, ref_point, image_height, focal, ix, iy):
+    wz = worldZ(heights, ref_point, ix, iy);
+    pinholeY = iy - (image_height/2)
+    return wz * pinholeY / focal;
+
+def point_cloud_range(point_cloud):
+    x_min = min(point_cloud[:, 0, 0])
+    x_max = max(point_cloud[:, 0, 0])
+
+    y_min = min(point_cloud[:, 0, 1])
+    y_max = max(point_cloud[:, 0, 1])
+
+    return x_min, x_max, y_min, y_max
+
+def interpolation_points(x_min, x_max, y_min, y_max):
+    x_range = (x_max - x_min)
+    y_range = (y_max - y_min)
+
+    # 100x100 grid of x and y values to interpolate
+    x_step = (x_range / 100)
+    y_step = (y_range / 100)
+    grid_x, grid_y = np.mgrid[x_min+x_step:x_max+x_step:(x_range / 100), y_min+y_step:y_max:(y_range / 100)]
+    return grid_x, grid_y
+
+def interpolate_point_cloud_1(point_cloud, grid_x, grid_y):
+    interp_points = point_cloud[:, 0, 0:2]
+    interp_values_z = point_cloud[:, 0, 2]
+    interp_values_b = point_cloud[:, 1, 0]
+    interp_values_g = point_cloud[:, 1, 1]
+    interp_values_r = point_cloud[:, 1, 2]
+
+    print 'BBBBB', interp_values_b
+
+    grid_z = griddata(interp_points, interp_values_z, (grid_x, grid_y), method='cubic')
+    grid_b = griddata(interp_points, interp_values_b, (grid_x, grid_y), method='cubic')
+    grid_g = griddata(interp_points, interp_values_g, (grid_x, grid_y), method='cubic')
+    grid_r = griddata(interp_points, interp_values_r, (grid_x, grid_y), method='cubic')
+
+    return grid_z, grid_b, grid_g, grid_r
+
+
+
 image = cv2.imread('./screenshot2.png')
 bin_image = binary_image(image)
 top_con = top_contour(bin_image)
@@ -67,85 +138,19 @@ heights = (image_height/2) - top_con
 # HACK: just guessing for now.
 focal = 64;
 
-def worldZ(ix, iy):
-    ih_ref = heights[ref_point_index]
-    wz_ref = 1;
-    return (ih_ref * wz_ref) / heights[ix]
-
-def worldX(ix, iy):
-    wz = worldZ(ix, iy);
-    pinholeX = ix - (image_width/2)
-    return wz * pinholeX / focal;
-
-def worldY(ix, iy):
-    wz = worldZ(ix, iy);
-    pinholeY = iy - (image_height/2)
-    return wz * pinholeY / focal;
-
 #########################################
 # IMAGES MUST BE ACCESSED IN Y, Z ORDER #
 #########################################
 
-def create_point_cloud(image, box):
-    point_cloud = []
-
-    for y in range(box[3]):
-        for x in range(box[2]):
-            ix = x + box[0]
-            iy = y + box[1]
-            #image[iy, ix] = (255, 0, 0)
-
-            wz = worldZ(ix, iy)
-            wx = worldX(ix, iy)
-            wy = worldY(ix, iy)
-            color = image[iy, ix];
-            point = np.array([wx, wy, wz])
-            point_cloud.append([point, color]);
-
-    np_point_cloud = np.array(point_cloud);
-    return np_point_cloud
-
 point_cloud = create_point_cloud(image, box)
-
-
-def point_cloud_range(point_cloud):
-    x_min = min(point_cloud[:, 0, 0])
-    x_max = max(point_cloud[:, 0, 0])
-
-    y_min = min(point_cloud[:, 0, 1])
-    y_max = max(point_cloud[:, 0, 1])
-
-    return x_min, x_max, y_min, y_max
 
 x_min, x_max, y_min, y_max = point_cloud_range(point_cloud)
 
-def interpolation_points(x_min, x_max, y_min, y_max):
-    x_range = (x_max - x_min)
-    y_range = (y_max - y_min)
 
-    # 100x100 grid of x and y values to interpolate
-    x_step = (x_range / 100)
-    y_step = (y_range / 100)
-    grid_x, grid_y = np.mgrid[x_min+x_step:x_max+x_step:(x_range / 100), y_min+y_step:y_max:(y_range / 100)]
-    return grid_x, grid_y
 
 grid_x, grid_y = interpolation_points(x_min, x_max, y_min, y_max)
 
-def interpolate_point_cloud_1(point_cloud, grid_x, grid_y):
-    interp_points = point_cloud[:, 0, 0:2]
-    interp_values_z = point_cloud[:, 0, 2]
-    interp_values_b = point_cloud[:, 1, 0]
-    interp_values_g = point_cloud[:, 1, 1]
-    interp_values_r = point_cloud[:, 1, 2]
 
-    print 'BBBBB', interp_values_b
-
-    grid_z = griddata(interp_points, interp_values_z, (grid_x, grid_y), method='cubic')
-    grid_b = griddata(interp_points, interp_values_b, (grid_x, grid_y), method='cubic')
-    grid_g = griddata(interp_points, interp_values_g, (grid_x, grid_y), method='cubic')
-    grid_r = griddata(interp_points, interp_values_r, (grid_x, grid_y), method='cubic')
-
-    return grid_z, grid_b, grid_g, grid_r
 
 grid_z, grid_b, grid_g, grid_r = interpolate_point_cloud_1(point_cloud, grid_x, grid_y)
 
