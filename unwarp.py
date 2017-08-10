@@ -107,36 +107,47 @@ def create_point_cloud(image, box):
 
 point_cloud = create_point_cloud(image, box)
 
-x_min = min(point_cloud[:, 0, 0])
-x_max = max(point_cloud[:, 0, 0])
 
-y_min = min(point_cloud[:, 0, 1])
-y_max = max(point_cloud[:, 0, 1])
+def point_cloud_range(point_cloud):
+    x_min = min(point_cloud[:, 0, 0])
+    x_max = max(point_cloud[:, 0, 0])
 
-print x_min, x_max, y_min, y_max
+    y_min = min(point_cloud[:, 0, 1])
+    y_max = max(point_cloud[:, 0, 1])
 
-# so far so good
+    return x_min, x_max, y_min, y_max
 
-x_range = (x_max - x_min)
-y_range = (y_max - y_min)
+x_min, x_max, y_min, y_max = point_cloud_range(point_cloud)
 
-# 100x100 grid of x and y values to interpolate
-x_step = (x_range / 100)
-y_step = (y_range / 100)
-grid_x, grid_y = np.mgrid[x_min+x_step:x_max+x_step:(x_range / 100), y_min+y_step:y_max:(y_range / 100)]
+def interpolation_points(x_min, x_max, y_min, y_max):
+    x_range = (x_max - x_min)
+    y_range = (y_max - y_min)
 
-interp_points = point_cloud[:, 0, 0:2]
-interp_values_z = point_cloud[:, 0, 2]
-interp_values_b = point_cloud[:, 1, 0]
-interp_values_g = point_cloud[:, 1, 1]
-interp_values_r = point_cloud[:, 1, 2]
+    # 100x100 grid of x and y values to interpolate
+    x_step = (x_range / 100)
+    y_step = (y_range / 100)
+    grid_x, grid_y = np.mgrid[x_min+x_step:x_max+x_step:(x_range / 100), y_min+y_step:y_max:(y_range / 100)]
+    return grid_x, grid_y
 
-print 'BBBBB', interp_values_b
+grid_x, grid_y = interpolation_points(x_min, x_max, y_min, y_max)
 
-grid_z = griddata(interp_points, interp_values_z, (grid_x, grid_y), method='cubic')
-grid_b = griddata(interp_points, interp_values_b, (grid_x, grid_y), method='cubic')
-grid_g = griddata(interp_points, interp_values_g, (grid_x, grid_y), method='cubic')
-grid_r = griddata(interp_points, interp_values_r, (grid_x, grid_y), method='cubic')
+def interpolate_point_cloud_1(point_cloud, grid_x, grid_y):
+    interp_points = point_cloud[:, 0, 0:2]
+    interp_values_z = point_cloud[:, 0, 2]
+    interp_values_b = point_cloud[:, 1, 0]
+    interp_values_g = point_cloud[:, 1, 1]
+    interp_values_r = point_cloud[:, 1, 2]
+
+    print 'BBBBB', interp_values_b
+
+    grid_z = griddata(interp_points, interp_values_z, (grid_x, grid_y), method='cubic')
+    grid_b = griddata(interp_points, interp_values_b, (grid_x, grid_y), method='cubic')
+    grid_g = griddata(interp_points, interp_values_g, (grid_x, grid_y), method='cubic')
+    grid_r = griddata(interp_points, interp_values_r, (grid_x, grid_y), method='cubic')
+
+    return grid_z, grid_b, grid_g, grid_r
+
+grid_z, grid_b, grid_g, grid_r = interpolate_point_cloud_1(point_cloud, grid_x, grid_y)
 
 def dist_arr_for_y(y_index):
     dist_arr = np.zeros(len(grid_x))
@@ -165,6 +176,9 @@ np_all_dist_arr = np.array(all_dist_arr).T
 print grid_y.shape
 print np_all_dist_arr.shape
 print grid_b.shape
+
+x_range = (x_max - x_min)
+y_range = (y_max - y_min)
 
 avg_row_dist = np.mean(np_all_dist_arr[-1])
 print avg_row_dist, y_range
