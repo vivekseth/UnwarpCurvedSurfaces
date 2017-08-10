@@ -4,65 +4,65 @@ import numpy as np
 import scipy as scp
 from scipy.interpolate import griddata
 
-def binary_image(image):
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    res, binary_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY)
-
-    # Size kernel to fit image!
-    kernel = np.ones((3,3),np.uint8)
-    clean_binary_image = cv2.morphologyEx(binary_image, cv2.MORPH_CLOSE, kernel)
-
-    # HACK: clean up bottom right corner
-    clean_binary_image[-2:, -2:] = 0
-    return clean_binary_image
-
-def top_contour(bin_image):
-    horizontal_edges = bin_image[1:, :] - bin_image[:-1, :]
-
-    (rows, cols) = horizontal_edges.shape;
-
-    top_contour = np.zeros(cols)
-
-    # TODO(vivek): find a way use anti-aliasing to get sub-pixel accuracy. 
-    for c in range(cols):
-        for r in range(rows):
-            if horizontal_edges[r, c] == 255:
-                top_contour[c] = r;
-                break
-
-    # HACK: clean up right end of top contour
-    top_contour[-2:] = 0
-    return top_contour
-
-def bounding_box(bin_image):
-    out, contours, hier = cv2.findContours(bin_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    bounding_box = cv2.boundingRect(contours[0])
-    return bounding_box
-
 image = cv2.imread('./screenshot2.png')
-bin_image = binary_image(image)
-top_con = top_contour(bin_image)
-box = bounding_box(bin_image)
 
-edge_boundaries = np.where(abs(top_con[1:] - top_con[:-1]) > 5)[0]
+
+gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+
+res, binary_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY)
+
+# Size kernel to fit image!
+kernel = np.ones((3,3),np.uint8)
+clean_binary_image = cv2.morphologyEx(binary_image, cv2.MORPH_CLOSE, kernel)
+
+# HACK: clean up bottom right corner
+clean_binary_image[-2:, -2:] = 0
+
+horizontal_edges = clean_binary_image[1:, :] - clean_binary_image[:-1, :]
+
+(rows, cols) = horizontal_edges.shape;
+
+top_contour = np.zeros(cols)
+
+# TODO(vivek): find a way use anti-aliasing to get sub-pixel accuracy. 
+for c in range(cols):
+    for r in range(rows):
+        if horizontal_edges[r, c] == 255:
+            top_contour[c] = r;
+            break
+
+# HACK: clean up right end of top contour
+top_contour[-2:] = 0
+
+edge_boundaries = np.where(abs(top_contour[1:] - top_contour[:-1]) > 5)[0]
+
+cropped_top_contour = top_contour[edge_boundaries[0]+1:edge_boundaries[1]+1]
+#print cropped_top_contour
+
 ref_point_index = edge_boundaries[0]+1;
 
-(image_height, image_width) = bin_image.shape
+image_height = rows;
+image_width = cols;
 
 # ASSUMPTION: bottom contour lines up with a horizontal plane cutting through pinhole.
-heights = (image_height/2) - top_con
 
+heights = (image_height/2) - top_contour
+cropped_heights = (image_height/2) - cropped_top_contour
+
+out, contours, hier = cv2.findContours(clean_binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+bounding_box = cv2.boundingRect(contours[0])
+p1 = bounding_box[0:2]
+p2 = (bounding_box[0] + bounding_box[2], bounding_box[1] + bounding_box[3])
 
 # Visualizations: 
-# p1 = bounding_box[0:2]
-# p2 = (bounding_box[0] + bounding_box[2], bounding_box[1] + bounding_box[3])
 # cv2.drawContours(image, contours, -1, (0,255,0), 3)
 # cv2.rectangle(image, p1, p2, (255, 0, 0))
 # for p in contours[0]:
 #     x = p[0][0]
 #     y = p[0][1]
 #     image[y, x] = (255, 0, 0)
-
 
 # HACK: just guessing for now.
 focal = 64;
@@ -82,36 +82,34 @@ def worldY(ix, iy):
     pinholeY = iy - (image_height/2)
     return wz * pinholeY / focal;
 
+
+
 #########################################
 # IMAGES MUST BE ACCESSED IN Y, Z ORDER #
 #########################################
 
-def create_point_cloud(image, box):
-    point_cloud = []
+point_cloud = []
 
-    for y in range(box[3]):
-        for x in range(box[2]):
-            ix = x + box[0]
-            iy = y + box[1]
-            #image[iy, ix] = (255, 0, 0)
+for y in range(bounding_box[3]):
+    for x in range(bounding_box[2]):
+        ix = x + bounding_box[0]
+        iy = y + bounding_box[1]
+        #image[iy, ix] = (255, 0, 0)
 
-            wz = worldZ(ix, iy)
-            wx = worldX(ix, iy)
-            wy = worldY(ix, iy)
-            color = image[iy, ix];
-            point = np.array([wx, wy, wz])
-            point_cloud.append([point, color]);
+        wz = worldZ(ix, iy)
+        wx = worldX(ix, iy)
+        wy = worldY(ix, iy)
+        color = image[iy, ix];
+        point = np.array([wx, wy, wz])
+        point_cloud.append([point, color]);
 
-    np_point_cloud = np.array(point_cloud);
-    return np_point_cloud
+np_point_cloud = np.array(point_cloud);
 
-point_cloud = create_point_cloud(image, box)
+x_min = min(np_point_cloud[:, 0, 0])
+x_max = max(np_point_cloud[:, 0, 0])
 
-x_min = min(point_cloud[:, 0, 0])
-x_max = max(point_cloud[:, 0, 0])
-
-y_min = min(point_cloud[:, 0, 1])
-y_max = max(point_cloud[:, 0, 1])
+y_min = min(np_point_cloud[:, 0, 1])
+y_max = max(np_point_cloud[:, 0, 1])
 
 print x_min, x_max, y_min, y_max
 
@@ -125,11 +123,11 @@ x_step = (x_range / 100)
 y_step = (y_range / 100)
 grid_x, grid_y = np.mgrid[x_min+x_step:x_max+x_step:(x_range / 100), y_min+y_step:y_max:(y_range / 100)]
 
-interp_points = point_cloud[:, 0, 0:2]
-interp_values_z = point_cloud[:, 0, 2]
-interp_values_b = point_cloud[:, 1, 0]
-interp_values_g = point_cloud[:, 1, 1]
-interp_values_r = point_cloud[:, 1, 2]
+interp_points = np_point_cloud[:, 0, 0:2]
+interp_values_z = np_point_cloud[:, 0, 2]
+interp_values_b = np_point_cloud[:, 1, 0]
+interp_values_g = np_point_cloud[:, 1, 1]
+interp_values_r = np_point_cloud[:, 1, 2]
 
 print 'BBBBB', interp_values_b
 
