@@ -108,53 +108,7 @@ def interpolate_point_cloud_1(point_cloud, grid_x, grid_y):
 
     return grid_z, grid_b, grid_g, grid_r
 
-
-
-image = cv2.imread('./screenshot2.png')
-bin_image = binary_image(image)
-top_con = top_contour(bin_image)
-box = bounding_box(bin_image)
-
-edge_boundaries = np.where(abs(top_con[1:] - top_con[:-1]) > 5)[0]
-ref_point_index = edge_boundaries[0]+1;
-
-(image_height, image_width) = bin_image.shape
-
-# ASSUMPTION: bottom contour lines up with a horizontal plane cutting through pinhole.
-heights = (image_height/2) - top_con
-
-
-# Visualizations: 
-# p1 = bounding_box[0:2]
-# p2 = (bounding_box[0] + bounding_box[2], bounding_box[1] + bounding_box[3])
-# cv2.drawContours(image, contours, -1, (0,255,0), 3)
-# cv2.rectangle(image, p1, p2, (255, 0, 0))
-# for p in contours[0]:
-#     x = p[0][0]
-#     y = p[0][1]
-#     image[y, x] = (255, 0, 0)
-
-
-# HACK: just guessing for now.
-focal = 64;
-
-#########################################
-# IMAGES MUST BE ACCESSED IN Y, Z ORDER #
-#########################################
-
-point_cloud = create_point_cloud(image, box)
-
-x_min, x_max, y_min, y_max = point_cloud_range(point_cloud)
-
-
-
-grid_x, grid_y = interpolation_points(x_min, x_max, y_min, y_max)
-
-
-
-grid_z, grid_b, grid_g, grid_r = interpolate_point_cloud_1(point_cloud, grid_x, grid_y)
-
-def dist_arr_for_y(y_index):
+def dist_arr_for_y(grid_x, grid_y, y_index):
     dist_arr = np.zeros(len(grid_x))
     for i in range(len(grid_x) - 1):
         x = grid_x[i][y_index]
@@ -169,29 +123,69 @@ def dist_arr_for_y(y_index):
         dist_arr[i+1] = dist_arr[i] + local_dist;
     return dist_arr
 
-all_dist_arr = []
-for i in range(len(grid_y[0])):
-    dist_arr = dist_arr_for_y(i)
-    max_dist = max(dist_arr);
-    dist_arr[np.isnan(dist_arr)] = 0
-    all_dist_arr.append(dist_arr)
+def find_ref_point_index(contour):
+    edge_boundaries = np.where(abs(contour[1:] - contour[:-1]) > 5)[0]
+    ref_point_index = edge_boundaries[0]+1;
+    return ref_point_index
 
-np_all_dist_arr = np.array(all_dist_arr).T
+def dist_arrs(grid_x, grid_y):
+    all_dist_arr = []
+    for i in range(len(grid_y[0])):
+        dist_arr = dist_arr_for_y(grid_x, grid_y, i)
+        max_dist = max(dist_arr);
+        dist_arr[np.isnan(dist_arr)] = 0
+        all_dist_arr.append(dist_arr)
+
+    np_all_dist_arr = np.array(all_dist_arr).T
+    return np_all_dist_arr
+
+def unwarped_height(fixed_width, all_dist_arr, height):
+    avg_row_dist = np.mean(all_dist_arr[-1])
+    aspect_ratio = avg_row_dist / height
+    scaled_height = int(np.ceil(fixed_width / aspect_ratio))
+    return scaled_height
+
+# HACK: just guessing for now.
+focal = 64;
+
+image = cv2.imread('./screenshot2.png')
+bin_image = binary_image(image)
+top_con = top_contour(bin_image)
+box = bounding_box(bin_image)
+ref_point_index = find_ref_point_index(top_con)
+(image_height, image_width) = bin_image.shape
+
+# ASSUMPTION: bottom contour lines up with a horizontal plane cutting through pinhole.
+heights = (image_height/2) - top_con
+
+# Visualizations: 
+# p1 = bounding_box[0:2]
+# p2 = (bounding_box[0] + bounding_box[2], bounding_box[1] + bounding_box[3])
+# cv2.drawContours(image, contours, -1, (0,255,0), 3)
+# cv2.rectangle(image, p1, p2, (255, 0, 0))
+# for p in contours[0]:
+#     x = p[0][0]
+#     y = p[0][1]
+#     image[y, x] = (255, 0, 0)
+
+#########################################
+# IMAGES MUST BE ACCESSED IN Y, Z ORDER #
+#########################################
+
+point_cloud = create_point_cloud(image, box)
+x_min, x_max, y_min, y_max = point_cloud_range(point_cloud)
+grid_x, grid_y = interpolation_points(x_min, x_max, y_min, y_max)
+grid_z, grid_b, grid_g, grid_r = interpolate_point_cloud_1(point_cloud, grid_x, grid_y)
+
+all_dist_arr = dist_arrs(grid_x, grid_y)
 
 print grid_y.shape
-print np_all_dist_arr.shape
+print all_dist_arr.shape
 print grid_b.shape
 
-x_range = (x_max - x_min)
-y_range = (y_max - y_min)
-
-avg_row_dist = np.mean(np_all_dist_arr[-1])
-print avg_row_dist, y_range
-
-aspect_ratio = avg_row_dist / y_range
-
+height = (y_max - y_min)
 fixed_width = 500
-scaled_height = int(np.ceil(500 / aspect_ratio))
+scaled_height = unwarped_height(fixed_width, all_dist_arr, height)
 
 #print fixed_width, scaled_height
 rectifiedImage = np.zeros((scaled_height, fixed_width, 3))
@@ -204,7 +198,7 @@ color_point_cloud = []
 for i in range(len(grid_b)):
     for j in range(len(grid_b[0])):
         y = grid_y[i][j]
-        d = np_all_dist_arr[i][j]
+        d = all_dist_arr[i][j]
         b = grid_b[i][j]
         g = grid_g[i][j]
         r = grid_r[i][j]
