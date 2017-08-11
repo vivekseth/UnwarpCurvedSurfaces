@@ -76,6 +76,8 @@ def gen_dist_array(wx, wz, x_interval):
 
 
 file_path = sys.argv[1]
+focal = float(sys.argv[2])
+
 image = cv2.imread(file_path)
 binary_image = create_binary_image(image)
 top_contour = get_top_contour(binary_image)
@@ -85,8 +87,6 @@ top_contour_range = np.where(abs(top_contour[1:] - top_contour[:-1]) > 5)[0] + 1
 
 (image_height, image_width) = binary_image.shape
 height_map = (image_height/2) - top_contour
-
-focal = 60;
 
 world_points = contour_to_world_points(top_contour, top_contour_range, (image_height, image_width), height_map, ref_point_index)
 # TODO(vivek): check that all Y values are the same
@@ -133,9 +133,8 @@ for oy in range(len(output_image)):
         output_image[output_height - oy - 1, output_width - ox - 1] = pixel[0, 0] / 255.0
 
 
-cv2.imwrite('./output_image.png', output_image * 255.0)
-cv2.imshow('', output_image)
-cv2.waitKey(0)
+cv2.imwrite('./test_focal_length/'+str(focal)+'.png', output_image * 255.0)
+
 
 
 
