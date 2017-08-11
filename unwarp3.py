@@ -35,10 +35,45 @@ def get_top_contour(bin_image):
     top_contour[-2:] = 0
     return top_contour
 
+def contour_to_world_points(contour, cont_range, size, heights, ref_point):
+    (height, width) = size
+    
+    world_points = []
+    for i in range(cont_range[0], cont_range[1]):
+        iy = (height/2) - contour[i]
+        ix = (width/2) - i
+
+        ih_ref = heights[ref_point]
+        wz_ref = 1;
+        wz = (ih_ref * wz_ref) / heights[i]
+        wx = wz * ix / focal;
+        wy = wz * iy / focal;
+        world_points.append([wx, wy, wz])
+
+    return np.array(world_points)
+
+def world_to_source(wx, wy, wz):
+    tix = focal * wx / wz;
+    tiy = focal * wy / wz;
+    return tix, tiy
+
 def find_ref_point_index(contour):
     edge_boundaries = np.where(abs(contour[1:] - contour[:-1]) > 5)[0]
     ref_point_index = edge_boundaries[0]+1;
     return ref_point_index
+
+def gen_dist_array(wx, wz, x_interval):
+
+    delta_x = x_interval[1] - x_interval[0]
+    delta_z_arr = fWxToWz(x_interval[1:]) - fWxToWz(x_interval[:-1])
+
+    distance = [0]
+    for delta_z in delta_z_arr:
+        dist = np.sqrt(delta_x * delta_x + delta_z * delta_z)
+        distance.append(distance[-1] + dist)
+
+    return np.array(distance)
+
 
 file_path = sys.argv[1]
 image = cv2.imread(file_path)
@@ -53,28 +88,7 @@ height_map = (image_height/2) - top_contour
 
 focal = 60;
 
-def contour_to_world_points(contour, cont_range):
-    world_points = []
-
-    for i in range(cont_range[0], cont_range[1]):
-        iy = (image_height/2) - contour[i]
-        ix = (image_width/2) - i
-
-        ih_ref = height_map[ref_point_index]
-        wz_ref = 1;
-        wz = (ih_ref * wz_ref) / height_map[i]
-        wx = wz * ix / focal;
-        wy = wz * iy / focal;
-        world_points.append([wx, wy, wz])
-
-    return np.array(world_points)
-
-def world_to_source(wx, wy, wz):
-    tix = focal * wx / wz;
-    tiy = focal * wy / wz;
-    return tix, tiy
-
-world_points = contour_to_world_points(top_contour, top_contour_range)
+world_points = contour_to_world_points(top_contour, top_contour_range, (image_height, image_width), height_map, ref_point_index)
 # TODO(vivek): check that all Y values are the same
 
 wx = world_points[:, 0]
@@ -85,18 +99,6 @@ wz = world_points[:, 2]
 fWxToWz = interp1d(wx[::-1], wz, kind='cubic')
 
 x_interval = np.linspace(min(wx), max(wx), num=100, endpoint=True)
-
-def gen_dist_array(wx, wz, x_interval):
-
-    delta_x = x_interval[1] - x_interval[0]
-    delta_z_arr = fWxToWz(x_interval[1:]) - fWxToWz(x_interval[:-1])
-
-    distance = [0]
-    for delta_z in delta_z_arr:
-        dist = np.sqrt(delta_x * delta_x + delta_z * delta_z)
-        distance.append(distance[-1] + dist)
-
-    return np.array(distance)
 
 distance_arr = gen_dist_array(wx, wz, x_interval)
 
@@ -109,6 +111,8 @@ fDistToWz = interp1d(distance_arr, fWxToWz(x_interval))
 aspect = height / width
 output_width = 500
 output_height = int(aspect * output_width)
+
+print 'Begin Unwarping'
 
 output_image = np.zeros((output_height, output_width, 3))
 for oy in range(len(output_image)):
@@ -126,7 +130,7 @@ for oy in range(len(output_image)):
         image_y = (image_height/2) - iy
 
         pixel = cv2.getRectSubPix(image, (1, 1), (image_x, image_y))
-        output_image[oy, ox] = pixel[0, 0] / 255.0
+        output_image[output_height - oy - 1, output_width - ox - 1] = pixel[0, 0] / 255.0
 
 
 cv2.imwrite('./output_image.png', output_image * 255.0)
